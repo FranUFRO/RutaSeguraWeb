@@ -81,32 +81,38 @@ class MetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AdminCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AdminSpacing.md,
+        vertical: AdminSpacing.sm,
+      ),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: color),
+            child: Icon(icon, color: color, size: 22),
           ),
-          const SizedBox(width: AdminSpacing.md),
+          const SizedBox(width: AdminSpacing.sm),
           Expanded(
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   value,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: AdminColors.navy,
                         fontWeight: FontWeight.w800,
                       ),
                 ),
                 Text(
                   label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AdminColors.muted,
                         fontWeight: FontWeight.w600,
                       ),

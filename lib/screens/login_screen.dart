@@ -79,7 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Iniciar Sesion',
+                          'Iniciar Sesión',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 color: AdminColors.navy,
@@ -133,7 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(width: 8),
                             Flexible(
                               child: Text(
-                                'Mantener sesion iniciada',
+                                'Mantener sesión iniciada',
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                       color: const Color(0xFF43474E),
                                       fontWeight: FontWeight.w500,
@@ -166,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('Iniciar Sesion'),
+                                Text('Iniciar Sesión'),
                                 SizedBox(width: 8),
                                 Icon(Icons.arrow_forward_rounded),
                               ],
@@ -262,7 +262,7 @@ class _PasswordField extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Contrasena',
+                'Contraseña',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: AdminColors.text,
                       fontWeight: FontWeight.w800,
@@ -281,7 +281,7 @@ class _PasswordField extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              child: const Text('Olvidaste tu contrasena?'),
+              child: const Text('Olvidaste tu contraseña?'),
             ),
           ],
         ),
@@ -294,7 +294,7 @@ class _PasswordField extends StatelessWidget {
             hintStyle: const TextStyle(color: AdminColors.muted),
             prefixIcon: const Icon(Icons.lock_outline_rounded, color: AdminColors.muted),
             suffixIcon: IconButton(
-              tooltip: obscureText ? 'Mostrar contrasena' : 'Ocultar contrasena',
+              tooltip: obscureText ? 'Mostrar contraseña' : 'Ocultar contraseña',
               onPressed: onToggleVisibility,
               icon: Icon(
                 obscureText ? Icons.visibility_outlined : Icons.visibility_off_outlined,
