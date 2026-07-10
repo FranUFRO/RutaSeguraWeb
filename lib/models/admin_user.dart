@@ -27,17 +27,23 @@ class AdminUser {
   final DateTime? lastAccess;
   final DateTime? createdAt;
 
-  factory AdminUser.fromJson(Map<String, dynamic> json) => AdminUser(
-        id: (json['id_user'] ?? '').toString(),
-        name: (json['full_name'] ?? 'Sin nombre').toString(),
-        email: (json['email'] ?? json['correo'] ?? '').toString(),
-        role: roleLabel((json['role'] ?? json['rol'] ?? '').toString()),
-        phone: (json['phone_number'] ?? json['telefono'] ?? '').toString(),
-        rut: (json['rut'] ?? '').toString(),
-        organization: (json['organizacion'] ?? 'Sin organizacion').toString(),
-        primaryAddress: json['direccion_principal']?.toString(),
-        status: statusFromApi((json['status'] ?? json['account_status'] ?? '').toString()),
-      );
+  factory AdminUser.fromJson(Map<String, dynamic> json) {
+    final role = roleLabel((json['role'] ?? json['rol'] ?? '').toString());
+    return AdminUser(
+      id: (json['id_user'] ?? '').toString(),
+      name: (json['full_name'] ?? 'Sin nombre').toString(),
+      email: (json['email'] ?? json['correo'] ?? '').toString(),
+      role: role,
+      phone: (json['phone_number'] ?? json['telefono'] ?? '').toString(),
+      rut: (json['rut'] ?? '').toString(),
+      organization: (json['organizacion'] ?? 'Sin organización').toString(),
+      primaryAddress: json['direccion_principal']?.toString(),
+      status: statusFromApi(
+        (json['status'] ?? json['account_status'] ?? '').toString(),
+        role: role,
+      ),
+    );
+  }
 
   static String roleLabel(String value) => switch (value.toUpperCase()) {
         'ADMIN' => 'Administrador',
@@ -52,11 +58,15 @@ class AdminUser {
         _ => 'VOLUNTEER',
       };
 
-  static AdminUserStatus statusFromApi(String value) => switch (value.toUpperCase()) {
-        'ACTIVE' || 'ACTIVO' => AdminUserStatus.active,
-        'BLOCKED' || 'BLOQUEADO' => AdminUserStatus.blocked,
-        _ => AdminUserStatus.pending,
-      };
+  static AdminUserStatus statusFromApi(String value, {String? role}) {
+    final normalized = value.trim().toUpperCase();
+    return switch (normalized) {
+      'ACTIVE' || 'ACTIVO' => AdminUserStatus.active,
+      'BLOCKED' || 'BLOQUEADO' => AdminUserStatus.blocked,
+      'PENDING' || 'PENDIENTE' => AdminUserStatus.pending,
+      _ => role == 'Supervisor' ? AdminUserStatus.pending : AdminUserStatus.active,
+    };
+  }
 
   static String statusApi(AdminUserStatus status) => switch (status) {
         AdminUserStatus.active => 'ACTIVE',

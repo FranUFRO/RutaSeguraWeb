@@ -319,7 +319,21 @@ class _Brand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = Text(
+      'Ruta Segura',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: (compact
+              ? Theme.of(context).textTheme.titleMedium
+              : Theme.of(context).textTheme.titleLarge)
+          ?.copyWith(
+        color: AdminColors.navy,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: compact ? 32 : 48,
@@ -335,18 +349,7 @@ class _Brand extends StatelessWidget {
           ),
         ),
         const SizedBox(width: AdminSpacing.sm),
-        Flexible(
-          child: Text(
-            'Ruta Segura',
-            style: (compact
-                    ? Theme.of(context).textTheme.titleMedium
-                    : Theme.of(context).textTheme.titleLarge)
-                ?.copyWith(
-              color: AdminColors.navy,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
+        if (compact) SizedBox(width: 104, child: text) else text,
       ],
     );
   }
@@ -498,7 +501,7 @@ class _LogoutButton extends StatelessWidget {
               const SizedBox(width: AdminSpacing.sm),
               Expanded(
                 child: Text(
-                  'Cerrar sesion',
+                  'Cerrar sesión',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: AdminColors.danger,
                         fontWeight: FontWeight.w800,

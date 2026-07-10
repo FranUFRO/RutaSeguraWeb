@@ -81,32 +81,38 @@ class MetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AdminCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AdminSpacing.md,
+        vertical: AdminSpacing.sm,
+      ),
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: color),
+            child: Icon(icon, color: color, size: 22),
           ),
-          const SizedBox(width: AdminSpacing.md),
+          const SizedBox(width: AdminSpacing.sm),
           Expanded(
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   value,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: AdminColors.navy,
                         fontWeight: FontWeight.w800,
                       ),
                 ),
                 Text(
                   label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AdminColors.muted,
                         fontWeight: FontWeight.w600,
                       ),
@@ -314,36 +320,50 @@ class AdminTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      obscureText: obscureText,
-      readOnly: readOnly,
-      validator: validator,
-      onChanged: onChanged,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        isDense: true,
-        labelText: label,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        prefixIcon: icon == null ? null : Icon(icon, size: 20),
-        prefixIconConstraints: const BoxConstraints(minWidth: 42, minHeight: 42),
-        filled: true,
-        fillColor: readOnly ? AdminColors.line.withValues(alpha: 0.55) : AdminColors.field,
-        suffixIcon: readOnly ? const Icon(Icons.lock_rounded, size: 18) : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 20, bottom: 5),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF4B5563),
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          obscureText: obscureText,
+          readOnly: readOnly,
+          validator: validator,
+          onChanged: onChanged,
+          maxLines: maxLines,
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            prefixIcon: icon == null ? null : Icon(icon, size: 20),
+            prefixIconConstraints: const BoxConstraints(minWidth: 42, minHeight: 46),
+            filled: true,
+            fillColor: readOnly ? AdminColors.line.withValues(alpha: 0.55) : AdminColors.field,
+            suffixIcon: readOnly ? const Icon(Icons.lock_rounded, size: 18) : null,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AdminColors.navy, width: 1.4),
+            ),
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AdminColors.navy, width: 1.4),
-        ),
-      ),
+      ],
     );
   }
 }

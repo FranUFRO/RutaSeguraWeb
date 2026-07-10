@@ -27,7 +27,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       await AppServices.auth.login(
         _emailController.text,
@@ -90,131 +93,135 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Form(
                       key: _formKey,
                       child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 150,
-                          height: 102,
-                          child: Image.network(
-                            _logoUrl,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const _RutaSeguraLogoFallback();
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 150,
+                            height: 102,
+                            child: Image.network(
+                              _logoUrl,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const _RutaSeguraLogoFallback();
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Iniciar sesión',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  color: AdminColors.navy,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.2,
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Ingresa a tu cuenta para continuar',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: const Color(0xFF43474E),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                          const SizedBox(height: 40),
+                          _LoginTextField(
+                            label: 'Correo electrónico',
+                            controller: _emailController,
+                            hintText: 'nombre@ejemplo.com',
+                            icon: Icons.mail_outline_rounded,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) {
+                              final email = value?.trim() ?? '';
+                              if (email.isEmpty) return 'Ingresa tu correo electrónico.';
+                              if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+                                return 'Ingresa un correo válido.';
+                              }
+                              return null;
                             },
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Iniciar Sesion',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: AdminColors.navy,
-                                fontWeight: FontWeight.w800,
-                                height: 1.2,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Ingresa a tu cuenta para continuar',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: const Color(0xFF43474E),
-                                fontWeight: FontWeight.w500,
-                              ),
-                        ),
-                        const SizedBox(height: 40),
-                        _LoginTextField(
-                          label: 'Correo Electronico',
-                          controller: _emailController,
-                          hintText: 'nombre@ejemplo.com',
-                          icon: Icons.mail_outline_rounded,
-                          keyboardType: TextInputType.emailAddress,
-                          validator: (value) {
-                            final email = value?.trim() ?? '';
-                            if (email.isEmpty) return 'Ingresa tu correo electronico.';
-                            if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
-                              return 'Ingresa un correo valido.';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 24),
-                        _PasswordField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          onToggleVisibility: () {
-                            setState(() => _obscurePassword = !_obscurePassword);
-                          },
-                          onSubmitted: (_) => _submit(),
-                        ),
-                        if (_error != null) ...[
+                          const SizedBox(height: 24),
+                          _PasswordField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            onToggleVisibility: () {
+                              setState(() => _obscurePassword = !_obscurePassword);
+                            },
+                            onSubmitted: (_) => _submit(),
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 14),
+                            Text(_error!, style: const TextStyle(color: AdminColors.danger)),
+                          ],
                           const SizedBox(height: 14),
-                          Text(_error!, style: const TextStyle(color: AdminColors.danger)),
-                        ],
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: Checkbox(
-                                value: _rememberSession,
-                                onChanged: (value) {
-                                  setState(() => _rememberSession = value ?? false);
-                                },
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                side: const BorderSide(color: Color(0xFFC4C6CF)),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(4),
+                          Row(
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: Checkbox(
+                                  value: _rememberSession,
+                                  onChanged: (value) {
+                                    setState(() => _rememberSession = value ?? false);
+                                  },
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  side: const BorderSide(color: Color(0xFFC4C6CF)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                'Mantener sesion iniciada',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: const Color(0xFF43474E),
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  'Mantener sesión iniciada',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: const Color(0xFF43474E),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: FilledButton(
-                            onPressed: _loading ? null : _submit,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AdminColors.navy,
-                              foregroundColor: AdminColors.selago,
-                              elevation: 10,
-                              shadowColor: AdminColors.navy.withValues(alpha: 0.35),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.45,
-                              ),
-                            ),
-                            child: _loading
-                                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
-                                : const Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text('Iniciar Sesion'),
-                                      SizedBox(width: 8),
-                                      Icon(Icons.arrow_forward_rounded),
-                                    ],
-                                  ),
+                            ],
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: FilledButton(
+                              onPressed: _loading ? null : _submit,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AdminColors.navy,
+                                foregroundColor: AdminColors.selago,
+                                elevation: 10,
+                                shadowColor: AdminColors.navy.withValues(alpha: 0.35),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.45,
+                                ),
+                              ),
+                              child: _loading
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text('Iniciar sesión'),
+                                        SizedBox(width: 8),
+                                        Icon(Icons.arrow_forward_rounded),
+                                      ],
+                                    ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -309,7 +316,7 @@ class _PasswordField extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Contrasena',
+                'Contraseña',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: AdminColors.text,
                       fontWeight: FontWeight.w800,
@@ -328,7 +335,7 @@ class _PasswordField extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              child: const Text('Olvidaste tu contrasena?'),
+              child: const Text('¿Olvidaste tu contraseña?'),
             ),
           ],
         ),
@@ -338,7 +345,7 @@ class _PasswordField extends StatelessWidget {
           obscureText: obscureText,
           onFieldSubmitted: onSubmitted,
           validator: (value) {
-            if ((value ?? '').isEmpty) return 'Ingresa tu contrasena.';
+            if ((value ?? '').isEmpty) return 'Ingresa tu contraseña.';
             if ((value ?? '').length < 8) return 'Debe tener al menos 8 caracteres.';
             return null;
           },
@@ -347,7 +354,7 @@ class _PasswordField extends StatelessWidget {
             hintStyle: const TextStyle(color: AdminColors.muted),
             prefixIcon: const Icon(Icons.lock_outline_rounded, color: AdminColors.muted),
             suffixIcon: IconButton(
-              tooltip: obscureText ? 'Mostrar contrasena' : 'Ocultar contrasena',
+              tooltip: obscureText ? 'Mostrar contraseña' : 'Ocultar contraseña',
               onPressed: onToggleVisibility,
               icon: Icon(
                 obscureText ? Icons.visibility_outlined : Icons.visibility_off_outlined,

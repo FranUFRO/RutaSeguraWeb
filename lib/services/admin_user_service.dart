@@ -6,6 +6,7 @@ import 'auth_service.dart';
 
 class AdminUserService {
   const AdminUserService(this._api, this._auth);
+
   final ApiClient _api;
   final AuthService _auth;
 
@@ -38,13 +39,14 @@ class AdminUserService {
     Uint8List? certificateBytes,
     String? certificateName,
   }) async {
+    final organizationName = organization.trim().isEmpty ? 'Ruta Segura' : organization.trim();
     await _api.multipart('/$_adminId/user/create', {
       'nombre_completo': name.trim(),
       'correo_electronico': email.trim().toLowerCase(),
       'password': password,
       'rut': rut.trim(),
       'telefono': phone.trim(),
-      'organizacion': organization.trim(),
+      'organizacion': organizationName,
       'rol': AdminUser.roleApi(role),
     }, fileBytes: certificateBytes, fileName: certificateName);
   }

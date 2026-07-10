@@ -67,7 +67,7 @@ class AuthService extends ChangeNotifier {
     });
     final token = response['token']?.toString();
     if (token == null || token.isEmpty) {
-      throw const ApiException('El servidor no entrego un token de acceso.');
+      throw const ApiException('El servidor no entregó un token de acceso.');
     }
     _api.bearerToken = token;
     final loggedIn = AuthUser(

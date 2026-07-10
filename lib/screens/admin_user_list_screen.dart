@@ -207,7 +207,7 @@ class _AdminUserListScreenState extends State<AdminUserListScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Estas seguro de que deseas eliminar este usuario?'),
+              const Text('¿Estás seguro de que deseas eliminar este usuario?'),
               const SizedBox(height: AdminSpacing.md),
               Container(
                 padding: const EdgeInsets.all(AdminSpacing.md),

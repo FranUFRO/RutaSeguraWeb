@@ -33,7 +33,7 @@ class _UserDetailsScreenState extends State<UserDetailsScreen> {
   Widget build(BuildContext context) {
     return AdminShell(
       title: 'Detalles de usuario',
-      subtitle: 'Informacion del perfil y datos personales.',
+      subtitle: 'Información del perfil y datos personales.',
       selectedRoute: '/usuarios',
       child: FutureBuilder<AdminUser>(
         future: _future,
@@ -136,17 +136,17 @@ class _ProfileBlock extends StatelessWidget {
           if (_isSupervisor(user))
             _ProfileFact(
               icon: Icons.business_rounded,
-              label: 'Organizacion',
+              label: 'Organización',
               value: user.organization,
             ),
           _ProfileFact(
             icon: Icons.access_time_rounded,
-            label: 'Ultima vez activo',
+            label: 'Última vez activo',
             value: _formatDate(user.lastAccess),
           ),
           _ProfileFact(
             icon: Icons.event_available_rounded,
-            label: 'Fecha de creacion',
+            label: 'Fecha de creación',
             value: _formatDate(user.createdAt),
           ),
         ],
@@ -176,15 +176,15 @@ class _UserDataBlock extends StatelessWidget {
           ),
           const SizedBox(height: AdminSpacing.sm),
           _DetailRow(icon: Icons.person_rounded, label: 'Nombre completo', value: user.name),
-          _DetailRow(icon: Icons.mail_rounded, label: 'Correo electronico', value: user.email),
+          _DetailRow(icon: Icons.mail_rounded, label: 'Correo electrónico', value: user.email),
           _DetailRow(icon: Icons.credit_card_rounded, label: 'RUT', value: user.rut),
-          _DetailRow(icon: Icons.phone_rounded, label: 'Numero', value: user.phone),
+          _DetailRow(icon: Icons.phone_rounded, label: 'Número', value: user.phone),
           _DetailRow(icon: Icons.business_center_rounded, label: 'Rol', value: user.role),
           if (_isSupervisor(user))
-            _DetailRow(icon: Icons.business_rounded, label: 'Organizacion', value: user.organization),
+            _DetailRow(icon: Icons.business_rounded, label: 'Organización', value: user.organization),
           _DetailRow(
             icon: Icons.home_rounded,
-            label: 'Direccion principal',
+            label: 'Dirección principal',
             value: user.primaryAddress,
           ),
         ],

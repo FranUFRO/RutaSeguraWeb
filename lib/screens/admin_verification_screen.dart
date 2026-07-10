@@ -1,6 +1,12 @@
+// ignore_for_file: avoid_web_libraries_in_flutter
+
+import 'dart:convert';
+import 'dart:html' as html;
+import 'dart:ui_web' as ui_web;
+
 import 'package:flutter/material.dart';
 
-import '../models/admin_user.dart';
+import '../models/supervisor_verification.dart';
 import '../services/app_services.dart';
 import '../widgets/admin_shell.dart';
 import '../widgets/admin_theme.dart';
@@ -17,18 +23,18 @@ class AdminVerificationScreen extends StatefulWidget {
 
 class _AdminVerificationScreenState extends State<AdminVerificationScreen> {
   bool _loading = true;
+  bool _validating = false;
+  bool _showingReviewDialog = false;
   String? _error;
-  List<AdminUser> _pendingSupervisors = const [];
-  int _selectedRequestIndex = 0;
-  int _currentPage = 1;
+  List<SupervisorVerification> _verifications = const [];
+  int _selectedIndex = 0;
+  Future<SupervisorDocumentFile>? _documentFuture;
 
-  AdminUser? get _selectedRequest {
-    if (_pendingSupervisors.isEmpty) return null;
-    final index = _selectedRequestIndex.clamp(0, _pendingSupervisors.length - 1).toInt();
-    return _pendingSupervisors[index];
+  SupervisorVerification? get _selectedRequest {
+    if (_verifications.isEmpty) return null;
+    final index = _selectedIndex.clamp(0, _verifications.length - 1).toInt();
+    return _verifications[index];
   }
-
-  int get _pendingDocumentCount => _pendingSupervisors.length;
 
   @override
   void initState() {
@@ -43,15 +49,13 @@ class _AdminVerificationScreenState extends State<AdminVerificationScreen> {
     });
 
     try {
-      final users = await AppServices.users.getUsers();
+      final verifications = await AppServices.documents.getPendingVerifications();
       if (!mounted) return;
-      final pending = users
-          .where((user) => user.role == 'Supervisor' && user.status == AdminUserStatus.pending)
-          .toList();
+      final nextIndex = verifications.isEmpty ? 0 : _selectedIndex.clamp(0, verifications.length - 1).toInt();
       setState(() {
-        _pendingSupervisors = pending;
-        _selectedRequestIndex = pending.isEmpty ? 0 : _selectedRequestIndex.clamp(0, pending.length - 1).toInt();
-        _currentPage = 1;
+        _verifications = verifications;
+        _selectedIndex = nextIndex;
+        _documentFuture = _documentFutureFor(verifications.isEmpty ? null : verifications[nextIndex]);
       });
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
@@ -60,129 +64,220 @@ class _AdminVerificationScreenState extends State<AdminVerificationScreen> {
     }
   }
 
+  Future<SupervisorDocumentFile>? _documentFutureFor(SupervisorVerification? verification) {
+    final documentId = verification?.primaryDocument?.id;
+    if (documentId == null || documentId.isEmpty) return null;
+    return AppServices.documents.getDocument(documentId);
+  }
+
   void _selectRequest(int index) {
+    final selected = _verifications[index];
     setState(() {
-      _selectedRequestIndex = index;
-      _currentPage = 1;
+      _selectedIndex = index;
+      _documentFuture = _documentFutureFor(selected);
     });
   }
 
-  void _showBackendLimitation() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'El backend actual no entrega el ID del documento pendiente. No se puede validar de forma segura desde esta cola.',
+  Future<void> _validateSelected(DocumentReviewStatus status) async {
+    final selected = _selectedRequest;
+    final documentId = selected?.primaryDocument?.id;
+    if (selected == null || documentId == null || documentId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay documento seleccionado para validar.')),
+      );
+      return;
+    }
+
+    setState(() => _showingReviewDialog = true);
+    final confirmed = await _confirmValidation(status, selected);
+    if (mounted) setState(() => _showingReviewDialog = false);
+    if (confirmed != true) return;
+
+    final notes = status == DocumentReviewStatus.approved ? 'Documento aprobado.' : 'Documento rechazado.';
+
+    setState(() => _validating = true);
+    try {
+      await AppServices.documents.validateDocument(
+        documentId: documentId,
+        status: status,
+        notes: notes,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(status == DocumentReviewStatus.approved ? 'Documento aprobado.' : 'Documento rechazado.'),
         ),
-      ),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No fue posible validar el documento: $error'),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _validating = false);
+    }
+  }
+
+  Future<bool?> _confirmValidation(DocumentReviewStatus status, SupervisorVerification request) async {
+    final approving = status == DocumentReviewStatus.approved;
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(approving ? 'Aprobar documento' : 'Rechazar documento'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                approving
+                    ? '¿Estás seguro de que deseas aprobar este documento?'
+                    : '¿Estás seguro de que deseas rechazar este documento?',
+              ),
+              const SizedBox(height: AdminSpacing.md),
+              Container(
+                padding: const EdgeInsets.all(AdminSpacing.md),
+                decoration: BoxDecoration(
+                  color: AdminColors.field,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: AdminColors.navy,
+                      foregroundColor: AdminColors.selago,
+                      child: Text(request.initials),
+                    ),
+                    const SizedBox(width: AdminSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _display(request.name),
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          Text(
+                            _display(request.email),
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: AdminColors.muted),
+                          ),
+                          Text(
+                            request.primaryDocument?.fileName ?? 'Documento supervisor',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AdminColors.navy,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            SizedBox(
+              height: 44,
+              child: FilledButton(
+                onPressed: () => Navigator.pop(context, false),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AdminColors.selago,
+                  foregroundColor: AdminColors.navy,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Cancelar'),
+              ),
+            ),
+            SizedBox(
+              height: 44,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.pop(context, true),
+                icon: Icon(approving ? Icons.check_circle_rounded : Icons.cancel_rounded),
+                label: Text(approving ? 'Aprobar' : 'Rechazar'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: approving ? AdminColors.success : AdminColors.danger,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return AdminShell(
-      subtitle: 'VERIFICACION DOCUMENTOS',
-      title: 'Verificaciones Pendientes',
+      subtitle: 'Verificación de documentos',
+      title: 'Verificaciones pendientes',
       selectedRoute: AdminVerificationScreen.routeName,
       actions: [
-        _PendingDocumentsBadge(count: _pendingDocumentCount),
+        _PendingDocumentsBadge(count: _verifications.length),
       ],
       child: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? _VerificationError(error: _error!, onRetry: _load)
-              : _pendingSupervisors.isEmpty
+              : _verifications.isEmpty
                   ? const _EmptyVerifications()
                   : LayoutBuilder(
                       builder: (context, constraints) {
                         final wide = constraints.maxWidth >= 980;
                         final selected = _selectedRequest!;
+                        final detail = _VerificationDetail(
+                          request: selected,
+                          documentFuture: _documentFuture,
+                          validating: _validating,
+                          hidePdf: _showingReviewDialog,
+                          onApprove: () => _validateSelected(DocumentReviewStatus.approved),
+                          onReject: () => _validateSelected(DocumentReviewStatus.rejected),
+                        );
 
                         if (!wide) {
                           return ListView(
                             children: [
-                              _BackendLimitationNotice(),
-                              const SizedBox(height: AdminSpacing.md),
                               _SupervisorQueue(
-                                requests: _pendingSupervisors,
-                                selectedIndex: _selectedRequestIndex,
+                                requests: _verifications,
+                                selectedIndex: _selectedIndex,
                                 onSelected: _selectRequest,
                               ),
                               const SizedBox(height: AdminSpacing.md),
-                              _VerificationDetail(
-                                request: selected,
-                                currentPage: _currentPage,
-                                onPreviousPage: _currentPage == 1
-                                    ? null
-                                    : () => setState(() => _currentPage--),
-                                onNextPage: _currentPage == 1
-                                    ? null
-                                    : () => setState(() => _currentPage++),
-                                onBlockedAction: _showBackendLimitation,
-                              ),
+                              detail,
                             ],
                           );
                         }
 
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        return ListView(
                           children: [
-                            SizedBox(
-                              width: 340,
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  children: [
-                                    _BackendLimitationNotice(),
-                                    const SizedBox(height: AdminSpacing.md),
-                                    _SupervisorQueue(
-                                      requests: _pendingSupervisors,
-                                      selectedIndex: _selectedRequestIndex,
-                                      onSelected: _selectRequest,
-                                    ),
-                                  ],
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  width: 292,
+                                  child: _SupervisorQueue(
+                                    requests: _verifications,
+                                    selectedIndex: _selectedIndex,
+                                    onSelected: _selectRequest,
+                                  ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: AdminSpacing.md),
-                            Expanded(
-                              child: SingleChildScrollView(
-                                child: _VerificationDetail(
-                                  request: selected,
-                                  currentPage: _currentPage,
-                                  onPreviousPage: null,
-                                  onNextPage: null,
-                                  onBlockedAction: _showBackendLimitation,
-                                ),
-                              ),
+                                const SizedBox(width: AdminSpacing.md),
+                                Expanded(child: detail),
+                              ],
                             ),
                           ],
                         );
                       },
                     ),
-    );
-  }
-}
-
-class _BackendLimitationNotice extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return AdminCard(
-      padding: const EdgeInsets.all(AdminSpacing.md),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.info_outline_rounded, color: AdminColors.warning),
-          const SizedBox(width: AdminSpacing.sm),
-          Expanded(
-            child: Text(
-              'La cola se arma con supervisores pendientes desde la API. El backend actual permite consultar/validar un documento por ID, pero no lista los IDs de documentos pendientes; por eso las acciones quedan preparadas, no ejecutadas.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AdminColors.muted,
-                    height: 1.35,
-                  ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -194,7 +289,7 @@ class _SupervisorQueue extends StatelessWidget {
     required this.onSelected,
   });
 
-  final List<AdminUser> requests;
+  final List<SupervisorVerification> requests;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
@@ -250,12 +345,13 @@ class _SupervisorRequestTile extends StatelessWidget {
     required this.onTap,
   });
 
-  final AdminUser request;
+  final SupervisorVerification request;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final document = request.primaryDocument;
     return Material(
       color: selected ? AdminColors.selago : AdminColors.field,
       borderRadius: BorderRadius.circular(18),
@@ -294,9 +390,10 @@ class _SupervisorRequestTile extends StatelessWidget {
                       style: const TextStyle(color: AdminColors.muted),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      'Certificado pendiente',
-                      style: TextStyle(
+                    Text(
+                      document?.fileName ?? 'Certificado pendiente',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
                         color: AdminColors.warning,
                         fontWeight: FontWeight.w800,
                       ),
@@ -316,53 +413,57 @@ class _SupervisorRequestTile extends StatelessWidget {
 class _VerificationDetail extends StatelessWidget {
   const _VerificationDetail({
     required this.request,
-    required this.currentPage,
-    required this.onPreviousPage,
-    required this.onNextPage,
-    required this.onBlockedAction,
+    required this.documentFuture,
+    required this.validating,
+    required this.hidePdf,
+    required this.onApprove,
+    required this.onReject,
   });
 
-  final AdminUser request;
-  final int currentPage;
-  final VoidCallback? onPreviousPage;
-  final VoidCallback? onNextPage;
-  final VoidCallback onBlockedAction;
+  final SupervisorVerification request;
+  final Future<SupervisorDocumentFile>? documentFuture;
+  final bool validating;
+  final bool hidePdf;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
 
   @override
   Widget build(BuildContext context) {
-    return AdminCard(
-      padding: const EdgeInsets.all(AdminSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _ReviewDocumentHeader(request: request),
-          const SizedBox(height: AdminSpacing.md),
-          _PdfReviewViewer(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AdminCard(
+          padding: const EdgeInsets.all(AdminSpacing.md),
+          child: _ReviewDocumentHeader(
             request: request,
-            currentPage: currentPage,
-            onPreviousPage: onPreviousPage,
-            onNextPage: onNextPage,
+            actions: _ReviewActions(
+              validating: validating,
+              onApprove: onApprove,
+              onReject: onReject,
+            ),
           ),
-          const SizedBox(height: AdminSpacing.md),
-          _ReviewActions(onBlockedAction: onBlockedAction),
-        ],
-      ),
+        ),
+        const SizedBox(height: AdminSpacing.md),
+        _PdfReviewViewer(documentFuture: documentFuture, hidePdf: hidePdf),
+      ],
     );
   }
 }
 
 class _ReviewDocumentHeader extends StatelessWidget {
-  const _ReviewDocumentHeader({required this.request});
+  const _ReviewDocumentHeader({required this.request, required this.actions});
 
-  final AdminUser request;
+  final SupervisorVerification request;
+  final Widget actions;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final document = request.primaryDocument;
+    final info = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Revisar Documento',
+          'Revisar documento',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 color: AdminColors.navy,
                 fontWeight: FontWeight.w900,
@@ -374,104 +475,144 @@ class _ReviewDocumentHeader extends StatelessWidget {
           runSpacing: AdminSpacing.xs,
           children: [
             _InlineInfo(label: 'Nombre', value: request.name),
-            _InlineInfo(label: 'Organizacion', value: request.organization),
+            _InlineInfo(label: 'Organización', value: request.organization),
             _InlineInfo(label: 'RUT', value: request.rut),
           ],
         ),
         const SizedBox(height: AdminSpacing.xs),
-        const Text(
-          'Certificado de organizacion / supervisor',
-          style: TextStyle(color: AdminColors.muted, fontWeight: FontWeight.w600),
+        Text(
+          document?.fileName ?? 'Certificado de organización / supervisor',
+          style: const TextStyle(color: AdminColors.muted, fontWeight: FontWeight.w600),
         ),
       ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 720) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              info,
+              const SizedBox(height: AdminSpacing.md),
+              actions,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: info),
+            const SizedBox(width: AdminSpacing.md),
+            actions,
+          ],
+        );
+      },
     );
   }
 }
 
 class _PdfReviewViewer extends StatelessWidget {
-  const _PdfReviewViewer({
-    required this.request,
-    required this.currentPage,
-    required this.onPreviousPage,
-    required this.onNextPage,
-  });
+  const _PdfReviewViewer({required this.documentFuture, required this.hidePdf});
 
-  final AdminUser request;
-  final int currentPage;
-  final VoidCallback? onPreviousPage;
-  final VoidCallback? onNextPage;
+  final Future<SupervisorDocumentFile>? documentFuture;
+  final bool hidePdf;
+
+  @override
+  Widget build(BuildContext context) {
+    if (documentFuture == null) {
+      return const _PdfStateMessage(
+        icon: Icons.description_outlined,
+        message: 'Esta verificación no tiene documento asociado.',
+      );
+    }
+
+    return FutureBuilder<SupervisorDocumentFile>(
+      future: documentFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 520,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return _PdfStateMessage(
+            icon: Icons.cloud_off_rounded,
+            message: snapshot.error.toString(),
+          );
+        }
+
+        final document = snapshot.data!;
+        if (document.contentBase64.trim().isEmpty) {
+          return const _PdfStateMessage(
+            icon: Icons.description_outlined,
+            message: 'El backend no entregó contenido para este PDF.',
+          );
+        }
+
+        if (hidePdf) {
+          return const _PdfStateMessage(
+            icon: Icons.picture_as_pdf_rounded,
+            message: 'PDF pausado mientras confirmas la acción.',
+          );
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(AdminSpacing.md),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE5E7EB),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AdminColors.line),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PdfToolbar(document: document),
+              const SizedBox(height: AdminSpacing.md),
+              SizedBox(
+                height: 760,
+                child: _PdfIframe(document: document),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PdfToolbar extends StatelessWidget {
+  const _PdfToolbar({required this.document});
+
+  final SupervisorDocumentFile document;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AdminSpacing.md, vertical: AdminSpacing.sm),
       decoration: BoxDecoration(
-        color: const Color(0xFFE5E7EB),
-        borderRadius: BorderRadius.circular(18),
+        color: AdminColors.field,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AdminColors.line),
       ),
-      child: Column(
+      child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AdminSpacing.md,
-              vertical: AdminSpacing.sm,
-            ),
-            decoration: const BoxDecoration(
-              color: Color(0xFFE0E3E5),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.zoom_in_rounded, color: AdminColors.navy, size: 18),
-                const SizedBox(width: AdminSpacing.sm),
-                const Icon(Icons.zoom_out_rounded, color: AdminColors.navy, size: 18),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'Pagina $currentPage / 1',
-                      style: const TextStyle(
-                        color: AdminColors.navy,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Pagina anterior',
-                  onPressed: onPreviousPage,
-                  color: AdminColors.navy,
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-                IconButton(
-                  tooltip: 'Pagina siguiente',
-                  onPressed: onNextPage,
-                  color: AdminColors.navy,
-                  icon: const Icon(Icons.chevron_right_rounded),
-                ),
-              ],
+          const Icon(Icons.picture_as_pdf_rounded, color: AdminColors.danger),
+          const SizedBox(width: AdminSpacing.sm),
+          Expanded(
+            child: Text(
+              document.fileName,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AdminColors.text, fontWeight: FontWeight.w800),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(AdminSpacing.md),
-            child: AspectRatio(
-              aspectRatio: 0.72,
-              child: Container(
-                padding: const EdgeInsets.all(AdminSpacing.xl),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x26000000),
-                      blurRadius: 18,
-                      offset: Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: _PdfPagePreview(request: request),
-              ),
-            ),
+          IconButton(
+            tooltip: 'Abrir PDF en pestaña nueva',
+            onPressed: () => _openPdf(document),
+            icon: const Icon(Icons.open_in_new_rounded),
           ),
         ],
       ),
@@ -479,83 +620,105 @@ class _PdfReviewViewer extends StatelessWidget {
   }
 }
 
-class _PdfPagePreview extends StatelessWidget {
-  const _PdfPagePreview({required this.request});
+class _PdfIframe extends StatefulWidget {
+  const _PdfIframe({required this.document});
 
-  final AdminUser request;
+  final SupervisorDocumentFile document;
+
+  @override
+  State<_PdfIframe> createState() => _PdfIframeState();
+}
+
+class _PdfIframeState extends State<_PdfIframe> {
+  late String _viewType;
+  String? _objectUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _registerView();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PdfIframe oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.document.contentBase64 != widget.document.contentBase64) {
+      _disposeObjectUrl();
+      _registerView();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposeObjectUrl();
+    super.dispose();
+  }
+
+  void _registerView() {
+    final bytes = _pdfBytes(widget.document.contentBase64);
+    final blob = html.Blob([bytes], 'application/pdf');
+    _objectUrl = html.Url.createObjectUrlFromBlob(blob);
+    _viewType = 'supervisor-pdf-${DateTime.now().microsecondsSinceEpoch}';
+    ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) {
+      return html.IFrameElement()
+        ..src = _objectUrl!
+        ..style.border = '0'
+        ..style.width = '100%'
+        ..style.height = '100%';
+    });
+  }
+
+  void _disposeObjectUrl() {
+    final url = _objectUrl;
+    if (url != null) html.Url.revokeObjectUrl(url);
+    _objectUrl = null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.route_rounded, color: AdminColors.navy),
-            const SizedBox(width: AdminSpacing.sm),
-            Expanded(
-              child: Text(
-                'Ruta Segura',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AdminColors.navy,
-                      fontWeight: FontWeight.w900,
-                    ),
-              ),
-            ),
-          ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: AdminColors.line),
+          borderRadius: BorderRadius.circular(14),
         ),
-        const SizedBox(height: AdminSpacing.lg),
-        Text(
-          'Certificado pendiente',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: AdminColors.text,
-                fontWeight: FontWeight.w800,
-              ),
-        ),
-        const SizedBox(height: AdminSpacing.sm),
-        Text(
-          _display(request.organization),
-          style: const TextStyle(color: AdminColors.muted, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: AdminSpacing.lg),
-        const _PdfLine(widthFactor: 1),
-        const _PdfLine(widthFactor: 0.92),
-        const _PdfLine(widthFactor: 0.78),
-        const SizedBox(height: AdminSpacing.lg),
-        Container(
-          height: 120,
-          decoration: BoxDecoration(
-            color: AdminColors.field,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AdminColors.line),
-          ),
-          child: const Center(
-            child: Icon(Icons.description_rounded, color: AdminColors.muted, size: 46),
-          ),
-        ),
-        const Spacer(),
-        const _PdfLine(widthFactor: 0.86),
-        const _PdfLine(widthFactor: 0.66),
-      ],
+        child: HtmlElementView(viewType: _viewType),
+      ),
     );
   }
 }
 
-class _PdfLine extends StatelessWidget {
-  const _PdfLine({required this.widthFactor});
+class _PdfStateMessage extends StatelessWidget {
+  const _PdfStateMessage({required this.icon, required this.message});
 
-  final double widthFactor;
+  final IconData icon;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    return FractionallySizedBox(
-      widthFactor: widthFactor,
-      child: Container(
-        height: 10,
-        margin: const EdgeInsets.only(bottom: AdminSpacing.sm),
-        decoration: BoxDecoration(
-          color: AdminColors.line,
-          borderRadius: BorderRadius.circular(999),
+    return Container(
+      height: 420,
+      decoration: BoxDecoration(
+        color: AdminColors.field,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AdminColors.line),
+      ),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AdminSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: AdminColors.muted, size: 48),
+              const SizedBox(height: AdminSpacing.sm),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AdminColors.muted, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -563,51 +726,42 @@ class _PdfLine extends StatelessWidget {
 }
 
 class _ReviewActions extends StatelessWidget {
-  const _ReviewActions({required this.onBlockedAction});
+  const _ReviewActions({
+    required this.validating,
+    required this.onApprove,
+    required this.onReject,
+  });
 
-  final VoidCallback onBlockedAction;
+  final bool validating;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 620;
-        final buttons = [
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Wrap(
+        alignment: WrapAlignment.end,
+        spacing: AdminSpacing.sm,
+        runSpacing: AdminSpacing.sm,
+        children: [
           _ReviewActionButton(
             label: 'Rechazar',
             icon: Icons.cancel_rounded,
             backgroundColor: const Color(0xFFFFDAD6),
             foregroundColor: AdminColors.danger,
-            onPressed: onBlockedAction,
+            onPressed: validating ? null : onReject,
           ),
           _ReviewActionButton(
-            label: 'Aprobar Documento',
+            label: 'Aprobar documento',
             icon: Icons.check_circle_rounded,
             backgroundColor: AdminColors.navy,
             foregroundColor: Colors.white,
-            onPressed: onBlockedAction,
+            loading: validating,
+            onPressed: validating ? null : onApprove,
           ),
-        ];
-
-        if (compact) {
-          return Align(
-            alignment: Alignment.centerRight,
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              spacing: AdminSpacing.sm,
-              runSpacing: AdminSpacing.sm,
-              children: buttons,
-            ),
-          );
-        }
-
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Wrap(spacing: AdminSpacing.sm, runSpacing: AdminSpacing.sm, children: buttons),
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
 }
@@ -685,13 +839,15 @@ class _ReviewActionButton extends StatelessWidget {
     required this.backgroundColor,
     required this.foregroundColor,
     required this.onPressed,
+    this.loading = false,
   });
 
   final String label;
   final IconData icon;
   final Color backgroundColor;
   final Color foregroundColor;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -700,11 +856,19 @@ class _ReviewActionButton extends StatelessWidget {
       height: 44,
       child: FilledButton.icon(
         onPressed: onPressed,
-        icon: Icon(icon, size: 18),
+        icon: loading
+            ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: foregroundColor),
+              )
+            : Icon(icon, size: 18),
         label: Text(label),
         style: FilledButton.styleFrom(
           backgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
+          disabledBackgroundColor: backgroundColor.withValues(alpha: 0.55),
+          disabledForegroundColor: foregroundColor.withValues(alpha: 0.85),
           padding: const EdgeInsets.symmetric(horizontal: AdminSpacing.sm),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
@@ -763,6 +927,19 @@ class _EmptyVerifications extends StatelessWidget {
       ),
     );
   }
+}
+
+void _openPdf(SupervisorDocumentFile document) {
+  final bytes = _pdfBytes(document.contentBase64);
+  final blob = html.Blob([bytes], 'application/pdf');
+  final url = html.Url.createObjectUrlFromBlob(blob);
+  html.window.open(url, '_blank');
+  Future<void>.delayed(const Duration(seconds: 5), () => html.Url.revokeObjectUrl(url));
+}
+
+List<int> _pdfBytes(String value) {
+  final clean = value.contains(',') ? value.split(',').last : value;
+  return base64Decode(clean.trim());
 }
 
 String _display(String? value) {

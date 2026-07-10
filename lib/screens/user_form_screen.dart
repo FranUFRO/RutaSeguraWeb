@@ -223,7 +223,7 @@ class _UserFormScaffoldState extends State<_UserFormScaffold> {
   Widget build(BuildContext context) {
     return AdminShell(
       title: _editing ? 'Formulario editar usuario' : 'Formulario crear usuario',
-      subtitle: _editing ? 'Actualiza datos personales y rol del usuario.' : 'Completa la informacion de acceso y perfil.',
+      subtitle: _editing ? 'Actualiza datos personales y rol del usuario.' : 'Completa la información de acceso y perfil.',
       selectedRoute: '/usuarios',
       child: SingleChildScrollView(
         child: AdminCard(
@@ -241,7 +241,7 @@ class _UserFormScaffoldState extends State<_UserFormScaffold> {
                     validator: _required,
                   ),
                   AdminTextField(
-                    label: 'Correo electronico',
+                    label: 'Correo electrónico',
                     controller: _emailController,
                     icon: Icons.mail_rounded,
                     keyboardType: TextInputType.emailAddress,
@@ -256,14 +256,14 @@ class _UserFormScaffoldState extends State<_UserFormScaffold> {
                     validator: _rutValidator,
                   ),
                   AdminTextField(
-                    label: 'Telefono',
+                    label: 'Teléfono',
                     controller: _phoneController,
                     icon: Icons.phone_rounded,
                     keyboardType: TextInputType.phone,
                   ),
                   if (_requiresOrganization)
                     AdminTextField(
-                      label: 'Organizacion',
+                      label: 'Organización',
                       controller: _organizationController,
                       icon: Icons.business_rounded,
                       validator: _required,
@@ -272,14 +272,14 @@ class _UserFormScaffoldState extends State<_UserFormScaffold> {
 
                 final passwordFields = [
                   AdminTextField(
-                    label: 'Contrasena',
+                    label: 'Contraseña',
                     controller: _passwordController,
                     icon: Icons.lock_rounded,
                     obscureText: true,
                     validator: _passwordValidator,
                   ),
                   AdminTextField(
-                    label: 'Confirmar contrasena',
+                    label: 'Confirmar contraseña',
                     controller: _confirmPasswordController,
                     icon: Icons.lock_outline_rounded,
                     obscureText: true,
@@ -361,25 +361,25 @@ class _UserFormScaffoldState extends State<_UserFormScaffold> {
   String? _emailValidator(String? value) {
     final email = (value ?? '').trim();
     if (email.isEmpty) return 'Campo obligatorio.';
-    return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email) ? null : 'Correo invalido.';
+    return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email) ? null : 'Correo inválido.';
   }
 
   String? _passwordValidator(String? value) {
     final password = value ?? '';
     if (password.isEmpty) return 'Campo obligatorio.';
-    if (password.length < 8) return 'Minimo 8 caracteres.';
+    if (password.length < 8) return 'Mínimo 8 caracteres.';
     return null;
   }
 
   String? _confirmPasswordValidator(String? value) {
     if ((value ?? '').isEmpty) return 'Campo obligatorio.';
-    return value == _passwordController.text ? null : 'Las contrasenas no coinciden.';
+    return value == _passwordController.text ? null : 'Las contraseñas no coinciden.';
   }
 
   String? _rutValidator(String? value) {
     final rut = (value ?? '').trim();
     if (rut.isEmpty) return 'Campo obligatorio.';
-    return _validRut(rut) ? null : 'RUT invalido.';
+    return _validRut(rut) ? null : 'RUT inválido.';
   }
 
   bool _validRut(String input) {
@@ -444,6 +444,7 @@ class _RoleCards extends StatelessWidget {
 
   final String selectedRole;
   final ValueChanged<String> onRoleChanged;
+  static const double _cardHeight = 136;
 
   @override
   Widget build(BuildContext context) {
@@ -491,7 +492,7 @@ class _RoleCards extends StatelessWidget {
                 return Column(
                   children: [
                     for (var index = 0; index < cards.length; index++) ...[
-                      SizedBox(height: 112, child: cards[index]),
+                      SizedBox(height: _cardHeight, child: cards[index]),
                       if (index != cards.length - 1) const SizedBox(height: AdminSpacing.sm),
                     ],
                   ],
@@ -499,7 +500,7 @@ class _RoleCards extends StatelessWidget {
               }
 
               return SizedBox(
-                height: 112,
+                height: _cardHeight,
                 child: Row(
                   children: [
                     Expanded(child: cards[0]),
@@ -542,7 +543,7 @@ class _RoleOptionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 112),
+          constraints: const BoxConstraints(minHeight: _RoleCards._cardHeight),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
@@ -572,7 +573,7 @@ class _RoleOptionCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 description,
-                maxLines: 2,
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: const Color(0xFF43474E),
@@ -649,7 +650,7 @@ class _CertificatePicker extends StatelessWidget {
                   style: TextStyle(color: AdminColors.text, fontWeight: FontWeight.w800),
                 ),
                 Text(
-                  fileName ?? 'Archivo obligatorio. Maximo 5 MB.',
+                  fileName ?? 'Archivo obligatorio. Máximo 5 MB.',
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: AdminColors.muted),
                 ),
