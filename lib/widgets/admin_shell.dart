@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'admin_theme.dart';
+import '../services/app_services.dart';
 
 class AdminShell extends StatelessWidget {
   const AdminShell({
@@ -34,16 +35,16 @@ class AdminShell extends StatelessWidget {
                 constraints: const BoxConstraints(maxWidth: _maxContentWidth),
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
-                    isWide ? AdminSpacing.xl : AdminSpacing.md,
-                    AdminSpacing.lg,
-                    isWide ? AdminSpacing.xl : AdminSpacing.md,
-                    isWide ? AdminSpacing.xl : AdminSpacing.md,
+                    isWide ? AdminSpacing.lg : AdminSpacing.md,
+                    AdminSpacing.md,
+                    isWide ? AdminSpacing.lg : AdminSpacing.md,
+                    isWide ? AdminSpacing.lg : AdminSpacing.md,
                   ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _PageHeader(title: title, subtitle: subtitle, actions: actions),
-                      const SizedBox(height: AdminSpacing.lg),
+                      const SizedBox(height: AdminSpacing.md),
                       Expanded(child: child),
                     ],
                   ),
@@ -95,7 +96,7 @@ class _TopBar extends StatelessWidget {
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: AdminSpacing.lg),
       decoration: BoxDecoration(
-        color: AdminColors.surface.withOpacity(0.86),
+        color: AdminColors.surface.withValues(alpha: 0.86),
         border: const Border(bottom: BorderSide(color: AdminColors.line)),
         boxShadow: const [
           BoxShadow(
@@ -111,9 +112,8 @@ class _TopBar extends StatelessWidget {
             const _Brand(compact: true),
             const SizedBox(width: AdminSpacing.lg),
           ],
-          const _AdminIdentity(),
+          const Flexible(child: _AdminIdentity()),
           const Spacer(),
-          const _NotificationButton(),
         ],
       ),
     );
@@ -357,25 +357,33 @@ class _AdminIdentity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Ricardo Velasquez',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: AdminColors.navy,
-                fontWeight: FontWeight.w900,
-              ),
-        ),
-        Text(
-          'Administrador',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AdminColors.muted,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-      ],
+    return AnimatedBuilder(
+      animation: AppServices.auth,
+      builder: (context, _) {
+        final user = AppServices.auth.user;
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              user?.displayName ?? 'Administrador',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AdminColors.navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+            Text(
+              'Administrador',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AdminColors.muted,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -463,40 +471,6 @@ class _IconNavButton extends StatelessWidget {
   }
 }
 
-class _NotificationButton extends StatelessWidget {
-  const _NotificationButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Notificaciones',
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          IconButton.filledTonal(
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none_rounded),
-            color: AdminColors.navy,
-          ),
-          Positioned(
-            right: 9,
-            top: 9,
-            child: Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: AdminColors.danger,
-                shape: BoxShape.circle,
-                border: Border.all(color: AdminColors.surface, width: 1.5),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _LogoutButton extends StatelessWidget {
   const _LogoutButton();
 
@@ -507,7 +481,12 @@ class _LogoutButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false),
+        onTap: () async {
+          await AppServices.auth.logout();
+          if (context.mounted) {
+            Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+          }
+        },
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AdminSpacing.md,

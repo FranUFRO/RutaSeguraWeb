@@ -1,190 +1,349 @@
 import 'package:flutter/material.dart';
 
-import '../services/admin_user_service.dart';
+import '../models/admin_user.dart';
+import '../services/app_services.dart';
+import '../services/dashboard_service.dart';
 import '../widgets/admin_shell.dart';
 import '../widgets/admin_theme.dart';
 import '../widgets/admin_widgets.dart';
 
-class AdminDashboardScreen extends StatelessWidget {
+class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
+  static const routeName = '/dashboard';
 
-  static const String routeName = '/dashboard';
+  @override
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _DashboardViewData {
+  const _DashboardViewData(this.users, this.activity);
+  final List<AdminUser> users;
+  final DashboardActivity activity;
+}
+
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  late Future<_DashboardViewData> _future = _load();
+
+  Future<_DashboardViewData> _load() async {
+    final responses = await Future.wait([
+      AppServices.users.getUsers(),
+      AppServices.dashboard.getActivity(),
+    ]);
+    return _DashboardViewData(
+      responses[0] as List<AdminUser>,
+      responses[1] as DashboardActivity,
+    );
+  }
+
+  void _reload() => setState(() => _future = _load());
 
   @override
   Widget build(BuildContext context) {
-    final metrics = const AdminUserService().getMetrics();
-
     return AdminShell(
       title: 'Dashboard',
       subtitle: 'Vista general para gestionar usuarios de Ruta Segura.',
-      selectedRoute: routeName,
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final columns = constraints.maxWidth >= 920
-                    ? 4
-                    : constraints.maxWidth >= 620
-                        ? 2
-                        : 1;
-
-                return GridView.count(
-                  crossAxisCount: columns,
-                  crossAxisSpacing: AdminSpacing.md,
-                  mainAxisSpacing: AdminSpacing.md,
-                  childAspectRatio: columns == 1 ? 3.5 : 2.2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    MetricCard(
-                      label: 'Usuarios totales',
-                      value: '${metrics.totalUsers}',
-                      icon: Icons.groups_rounded,
-                      color: AdminColors.navy,
-                    ),
-                    MetricCard(
-                      label: 'Usuarios activos',
-                      value: '${metrics.activeUsers}',
-                      icon: Icons.check_circle_rounded,
-                      color: AdminColors.success,
-                    ),
-                    MetricCard(
-                      label: 'Pendientes',
-                      value: '${metrics.pendingUsers}',
-                      icon: Icons.schedule_rounded,
-                      color: AdminColors.warning,
-                    ),
-                    MetricCard(
-                      label: 'Bloqueados',
-                      value: '${metrics.blockedUsers}',
-                      icon: Icons.block_rounded,
-                      color: AdminColors.danger,
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: AdminSpacing.lg),
-            AdminCard(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 720;
-                  final panel = Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Operacion administrativa',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              color: AdminColors.navy,
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                      const SizedBox(height: AdminSpacing.sm),
-                      Text(
-                        'Revisa usuarios, valida solicitudes y manten la informacion actualizada desde un panel limpio y responsive.',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: AdminColors.muted,
-                              height: 1.45,
-                            ),
-                      ),
-                      const SizedBox(height: AdminSpacing.lg),
-                      Wrap(
-                        spacing: AdminSpacing.sm,
-                        runSpacing: AdminSpacing.sm,
-                        children: [
-                          _DashboardActionButton(
-                            label: 'Ver usuarios',
-                            icon: Icons.people_alt_rounded,
-                            backgroundColor: AdminColors.navy,
-                            foregroundColor: AdminColors.selago,
-                            onPressed: () => Navigator.pushNamed(context, '/usuarios'),
-                          ),
-                          _DashboardActionButton(
-                            label: 'Verificar usuarios',
-                            icon: Icons.verified_user_rounded,
-                            backgroundColor: AdminColors.success,
-                            foregroundColor: Colors.white,
-                            onPressed: () => Navigator.pushNamed(context, '/verificar'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  );
-                  final icon = Container(
-                    width: compact ? double.infinity : 220,
-                    height: compact ? 140 : 220,
-                    decoration: BoxDecoration(
-                      color: AdminColors.selago,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: const Icon(
-                      Icons.admin_panel_settings_rounded,
-                      size: 86,
-                      color: AdminColors.navy,
-                    ),
-                  );
-
-                  if (compact) {
-                    return Column(
+      selectedRoute: AdminDashboardScreen.routeName,
+      child: FutureBuilder<_DashboardViewData>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return _LoadError(error: snapshot.error.toString(), onRetry: _reload);
+          }
+          final data = snapshot.data!;
+          final metrics = AdminMetrics.fromUsers(data.users);
+          return SingleChildScrollView(
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LayoutBuilder(builder: (context, constraints) {
+                    final columns = constraints.maxWidth >= 920
+                        ? 4
+                        : constraints.maxWidth >= 620
+                            ? 2
+                            : 1;
+                    final cardHeight = columns == 1 ? 112.0 : 132.0;
+                    final maxWidth = constraints.maxWidth.isFinite
+                        ? constraints.maxWidth
+                        : MediaQuery.sizeOf(context).width;
+                    final spacing = AdminSpacing.md * (columns - 1);
+                    final cardWidth = (maxWidth - spacing) / columns;
+                    return Wrap(
+                      spacing: AdminSpacing.md,
+                      runSpacing: AdminSpacing.md,
                       children: [
-                        icon,
-                        const SizedBox(height: AdminSpacing.lg),
-                        panel,
+                        SizedBox(
+                          width: cardWidth,
+                          height: cardHeight,
+                          child: MetricCard(
+                            label: 'Usuarios totales',
+                            value: '${metrics.totalUsers}',
+                            icon: Icons.groups_rounded,
+                            color: AdminColors.navy,
+                          ),
+                        ),
+                        SizedBox(
+                          width: cardWidth,
+                          height: cardHeight,
+                          child: MetricCard(
+                            label: 'Usuarios activos',
+                            value: '${metrics.activeUsers}',
+                            icon: Icons.check_circle_rounded,
+                            color: AdminColors.success,
+                          ),
+                        ),
+                        SizedBox(
+                          width: cardWidth,
+                          height: cardHeight,
+                          child: MetricCard(
+                            label: 'Pendientes',
+                            value: '${metrics.pendingUsers}',
+                            icon: Icons.schedule_rounded,
+                            color: AdminColors.warning,
+                          ),
+                        ),
+                        SizedBox(
+                          width: cardWidth,
+                          height: cardHeight,
+                          child: MetricCard(
+                            label: 'Bloqueados',
+                            value: '${metrics.blockedUsers}',
+                            icon: Icons.block_rounded,
+                            color: AdminColors.danger,
+                          ),
+                        ),
                       ],
                     );
-                  }
-
-                  return Row(
-                    children: [
-                      Expanded(child: panel),
-                      const SizedBox(width: AdminSpacing.lg),
-                      icon,
-                    ],
-                  );
-                },
+                  }),
+                  const SizedBox(height: AdminSpacing.lg),
+                  Text(
+                    'Actividad reciente',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: AdminColors.navy,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: AdminSpacing.xs),
+                  Text(
+                    'Indicadores reales de alertas SOS y rutas completadas durante los ultimos 7 dias.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AdminColors.muted,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                  const SizedBox(height: AdminSpacing.md),
+                  LayoutBuilder(builder: (context, constraints) {
+                    final charts = [
+                      _ActivityChart(
+                        title: 'Alertas SOS por dia',
+                        subtitle: '${data.activity.totalAlerts} alertas registradas',
+                        points: data.activity.sosAlerts,
+                        color: AdminColors.danger,
+                        icon: Icons.sos_rounded,
+                      ),
+                      _ActivityChart(
+                        title: 'Rutas completadas por sector',
+                        subtitle: '${data.activity.totalCompletedRoutes} rutas completadas',
+                        points: data.activity.routesBySector,
+                        color: AdminColors.success,
+                        icon: Icons.route_rounded,
+                      ),
+                    ];
+                    if (constraints.maxWidth < 820) {
+                      return Column(
+                        children: [
+                          charts[0],
+                          const SizedBox(height: AdminSpacing.md),
+                          charts[1],
+                        ],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: charts[0]),
+                        const SizedBox(width: AdminSpacing.md),
+                        Expanded(child: charts[1]),
+                      ],
+                    );
+                  }),
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 }
 
-class _DashboardActionButton extends StatelessWidget {
-  const _DashboardActionButton({
-    required this.label,
+class _ActivityChart extends StatelessWidget {
+  const _ActivityChart({
+    required this.title,
+    required this.subtitle,
+    required this.points,
+    required this.color,
     required this.icon,
-    required this.backgroundColor,
-    required this.foregroundColor,
-    required this.onPressed,
   });
 
-  final String label;
+  final String title;
+  final String subtitle;
+  final List<DashboardChartPoint> points;
+  final Color color;
   final IconData icon;
-  final Color backgroundColor;
-  final Color foregroundColor;
-  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 190,
-      height: 48,
-      child: FilledButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon),
-        label: Text(label),
-        style: FilledButton.styleFrom(
-          backgroundColor: backgroundColor,
-          foregroundColor: foregroundColor,
-          padding: const EdgeInsets.symmetric(horizontal: AdminSpacing.md),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w700),
-        ),
+    final hasData = points.any((point) => point.value > 0);
+    final maximum = points.fold<int>(0, (current, point) => point.value > current ? point.value : current);
+    return AdminCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(width: AdminSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: AdminColors.navy,
+                          ),
+                    ),
+                    Text(subtitle, style: const TextStyle(color: AdminColors.muted)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AdminSpacing.lg),
+          if (!hasData)
+            const SizedBox(
+              height: 190,
+              child: Center(
+                child: Text(
+                  'Sin datos para el periodo.',
+                  style: TextStyle(color: AdminColors.muted),
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              height: 190,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var index = 0; index < points.length; index++) ...[
+                    _ChartBar(
+                      point: points[index],
+                      maximum: maximum,
+                      color: color,
+                    ),
+                    if (index != points.length - 1) const SizedBox(height: AdminSpacing.xs),
+                  ],
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
+}
+
+class _ChartBar extends StatelessWidget {
+  const _ChartBar({
+    required this.point,
+    required this.maximum,
+    required this.color,
+  });
+
+  final DashboardChartPoint point;
+  final int maximum;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 82,
+          child: Text(
+            point.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12, color: AdminColors.muted),
+          ),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              height: 14,
+              color: AdminColors.field,
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: maximum == 0 ? 0 : point.value / maximum,
+                child: ColoredBox(color: color),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: AdminSpacing.xs),
+        SizedBox(
+          width: 28,
+          child: Text(
+            '${point.value}',
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LoadError extends StatelessWidget {
+  const _LoadError({required this.error, required this.onRetry});
+  final String error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded, size: 48, color: AdminColors.danger),
+            const SizedBox(height: AdminSpacing.sm),
+            const Text('No se pudieron cargar los datos del dashboard.'),
+            const SizedBox(height: AdminSpacing.xs),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AdminColors.muted),
+            ),
+            const SizedBox(height: AdminSpacing.sm),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
 }

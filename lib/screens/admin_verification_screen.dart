@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/supervisor_verification.dart';
-import '../services/admin_user_service.dart';
+import '../models/admin_user.dart';
+import '../services/app_services.dart';
 import '../widgets/admin_shell.dart';
 import '../widgets/admin_theme.dart';
 import '../widgets/admin_widgets.dart';
@@ -16,25 +16,65 @@ class AdminVerificationScreen extends StatefulWidget {
 }
 
 class _AdminVerificationScreenState extends State<AdminVerificationScreen> {
-  late final List<SupervisorVerification> _requests =
-      const AdminUserService().getPendingSupervisorVerifications();
+  bool _loading = true;
+  String? _error;
+  List<AdminUser> _pendingSupervisors = const [];
   int _selectedRequestIndex = 0;
   int _currentPage = 1;
 
-  SupervisorVerification get _selectedRequest => _requests[_selectedRequestIndex];
+  AdminUser? get _selectedRequest {
+    if (_pendingSupervisors.isEmpty) return null;
+    final index = _selectedRequestIndex.clamp(0, _pendingSupervisors.length - 1).toInt();
+    return _pendingSupervisors[index];
+  }
 
-  VerificationDocument get _selectedDocument => _selectedRequest.documents.first;
+  int get _pendingDocumentCount => _pendingSupervisors.length;
 
-  int get _pendingDocumentCount => _requests.fold<int>(
-        0,
-        (total, request) => total + request.documents.where((document) => document.status == DocumentReviewStatus.pending).length,
-      );
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final users = await AppServices.users.getUsers();
+      if (!mounted) return;
+      final pending = users
+          .where((user) => user.role == 'Supervisor' && user.status == AdminUserStatus.pending)
+          .toList();
+      setState(() {
+        _pendingSupervisors = pending;
+        _selectedRequestIndex = pending.isEmpty ? 0 : _selectedRequestIndex.clamp(0, pending.length - 1).toInt();
+        _currentPage = 1;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   void _selectRequest(int index) {
     setState(() {
       _selectedRequestIndex = index;
       _currentPage = 1;
     });
+  }
+
+  void _showBackendLimitation() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'El backend actual no entrega el ID del documento pendiente. No se puede validar de forma segura desde esta cola.',
+        ),
+      ),
+    );
   }
 
   @override
@@ -46,66 +86,102 @@ class _AdminVerificationScreenState extends State<AdminVerificationScreen> {
       actions: [
         _PendingDocumentsBadge(count: _pendingDocumentCount),
       ],
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 980;
+      child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _VerificationError(error: _error!, onRetry: _load)
+              : _pendingSupervisors.isEmpty
+                  ? const _EmptyVerifications()
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final wide = constraints.maxWidth >= 980;
+                        final selected = _selectedRequest!;
 
-          if (!wide) {
-            return ListView(
-              children: [
-                _SupervisorQueue(
-                  requests: _requests,
-                  selectedIndex: _selectedRequestIndex,
-                  onSelected: _selectRequest,
-                ),
-                const SizedBox(height: AdminSpacing.md),
-                _VerificationDetail(
-                  request: _selectedRequest,
-                  document: _selectedDocument,
-                  currentPage: _currentPage,
-                  onPreviousPage: _currentPage == 1
-                      ? null
-                      : () => setState(() => _currentPage--),
-                  onNextPage: _currentPage == _selectedDocument.pageCount
-                      ? null
-                      : () => setState(() => _currentPage++),
-                ),
-              ],
-            );
-          }
+                        if (!wide) {
+                          return ListView(
+                            children: [
+                              _BackendLimitationNotice(),
+                              const SizedBox(height: AdminSpacing.md),
+                              _SupervisorQueue(
+                                requests: _pendingSupervisors,
+                                selectedIndex: _selectedRequestIndex,
+                                onSelected: _selectRequest,
+                              ),
+                              const SizedBox(height: AdminSpacing.md),
+                              _VerificationDetail(
+                                request: selected,
+                                currentPage: _currentPage,
+                                onPreviousPage: _currentPage == 1
+                                    ? null
+                                    : () => setState(() => _currentPage--),
+                                onNextPage: _currentPage == 1
+                                    ? null
+                                    : () => setState(() => _currentPage++),
+                                onBlockedAction: _showBackendLimitation,
+                              ),
+                            ],
+                          );
+                        }
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 340,
-                child: SingleChildScrollView(
-                  child: _SupervisorQueue(
-                    requests: _requests,
-                    selectedIndex: _selectedRequestIndex,
-                    onSelected: _selectRequest,
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 340,
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  children: [
+                                    _BackendLimitationNotice(),
+                                    const SizedBox(height: AdminSpacing.md),
+                                    _SupervisorQueue(
+                                      requests: _pendingSupervisors,
+                                      selectedIndex: _selectedRequestIndex,
+                                      onSelected: _selectRequest,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: AdminSpacing.md),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                child: _VerificationDetail(
+                                  request: selected,
+                                  currentPage: _currentPage,
+                                  onPreviousPage: null,
+                                  onNextPage: null,
+                                  onBlockedAction: _showBackendLimitation,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+    );
+  }
+}
+
+class _BackendLimitationNotice extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return AdminCard(
+      padding: const EdgeInsets.all(AdminSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, color: AdminColors.warning),
+          const SizedBox(width: AdminSpacing.sm),
+          Expanded(
+            child: Text(
+              'La cola se arma con supervisores pendientes desde la API. El backend actual permite consultar/validar un documento por ID, pero no lista los IDs de documentos pendientes; por eso las acciones quedan preparadas, no ejecutadas.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AdminColors.muted,
+                    height: 1.35,
                   ),
-                ),
-              ),
-              const SizedBox(width: AdminSpacing.md),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: _VerificationDetail(
-                    request: _selectedRequest,
-                    document: _selectedDocument,
-                    currentPage: _currentPage,
-                    onPreviousPage: _currentPage == 1
-                        ? null
-                        : () => setState(() => _currentPage--),
-                    onNextPage: _currentPage == _selectedDocument.pageCount
-                        ? null
-                        : () => setState(() => _currentPage++),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -118,7 +194,7 @@ class _SupervisorQueue extends StatelessWidget {
     required this.onSelected,
   });
 
-  final List<SupervisorVerification> requests;
+  final List<AdminUser> requests;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
@@ -142,17 +218,12 @@ class _SupervisorQueue extends StatelessWidget {
               ),
               const SizedBox(width: AdminSpacing.sm),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Supervisores pendientes',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: AdminColors.navy,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                  ],
+                child: Text(
+                  'Supervisores pendientes',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AdminColors.navy,
+                        fontWeight: FontWeight.w800,
+                      ),
                 ),
               ),
             ],
@@ -179,7 +250,7 @@ class _SupervisorRequestTile extends StatelessWidget {
     required this.onTap,
   });
 
-  final SupervisorVerification request;
+  final AdminUser request;
   final bool selected;
   final VoidCallback onTap;
 
@@ -210,7 +281,7 @@ class _SupervisorRequestTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      request.name,
+                      _display(request.name),
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                             color: AdminColors.text,
@@ -218,14 +289,14 @@ class _SupervisorRequestTile extends StatelessWidget {
                           ),
                     ),
                     Text(
-                      request.organization,
+                      _display(request.organization),
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: AdminColors.muted),
                     ),
                     const SizedBox(height: 4),
-                    Text(
+                    const Text(
                       'Certificado pendiente',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AdminColors.warning,
                         fontWeight: FontWeight.w800,
                       ),
@@ -245,17 +316,17 @@ class _SupervisorRequestTile extends StatelessWidget {
 class _VerificationDetail extends StatelessWidget {
   const _VerificationDetail({
     required this.request,
-    required this.document,
     required this.currentPage,
     required this.onPreviousPage,
     required this.onNextPage,
+    required this.onBlockedAction,
   });
 
-  final SupervisorVerification request;
-  final VerificationDocument document;
+  final AdminUser request;
   final int currentPage;
   final VoidCallback? onPreviousPage;
   final VoidCallback? onNextPage;
+  final VoidCallback onBlockedAction;
 
   @override
   Widget build(BuildContext context) {
@@ -264,16 +335,16 @@ class _VerificationDetail extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ReviewDocumentHeader(request: request, document: document),
+          _ReviewDocumentHeader(request: request),
           const SizedBox(height: AdminSpacing.md),
           _PdfReviewViewer(
-            document: document,
+            request: request,
             currentPage: currentPage,
             onPreviousPage: onPreviousPage,
             onNextPage: onNextPage,
           ),
           const SizedBox(height: AdminSpacing.md),
-          const _ReviewActions(),
+          _ReviewActions(onBlockedAction: onBlockedAction),
         ],
       ),
     );
@@ -281,13 +352,9 @@ class _VerificationDetail extends StatelessWidget {
 }
 
 class _ReviewDocumentHeader extends StatelessWidget {
-  const _ReviewDocumentHeader({
-    required this.request,
-    required this.document,
-  });
+  const _ReviewDocumentHeader({required this.request});
 
-  final SupervisorVerification request;
-  final VerificationDocument document;
+  final AdminUser request;
 
   @override
   Widget build(BuildContext context) {
@@ -312,9 +379,9 @@ class _ReviewDocumentHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AdminSpacing.xs),
-        Text(
-          document.title,
-          style: const TextStyle(color: AdminColors.muted, fontWeight: FontWeight.w600),
+        const Text(
+          'Certificado de organizacion / supervisor',
+          style: TextStyle(color: AdminColors.muted, fontWeight: FontWeight.w600),
         ),
       ],
     );
@@ -323,13 +390,13 @@ class _ReviewDocumentHeader extends StatelessWidget {
 
 class _PdfReviewViewer extends StatelessWidget {
   const _PdfReviewViewer({
-    required this.document,
+    required this.request,
     required this.currentPage,
     required this.onPreviousPage,
     required this.onNextPage,
   });
 
-  final VerificationDocument document;
+  final AdminUser request;
   final int currentPage;
   final VoidCallback? onPreviousPage;
   final VoidCallback? onNextPage;
@@ -362,7 +429,7 @@ class _PdfReviewViewer extends StatelessWidget {
                   child: Align(
                     alignment: Alignment.centerRight,
                     child: Text(
-                      'Pagina $currentPage / ${document.pageCount}',
+                      'Pagina $currentPage / 1',
                       style: const TextStyle(
                         color: AdminColors.navy,
                         fontWeight: FontWeight.w800,
@@ -402,10 +469,7 @@ class _PdfReviewViewer extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: _PdfPagePreview(
-                  document: document,
-                  currentPage: currentPage,
-                ),
+                child: _PdfPagePreview(request: request),
               ),
             ),
           ),
@@ -416,13 +480,9 @@ class _PdfReviewViewer extends StatelessWidget {
 }
 
 class _PdfPagePreview extends StatelessWidget {
-  const _PdfPagePreview({
-    required this.document,
-    required this.currentPage,
-  });
+  const _PdfPagePreview({required this.request});
 
-  final VerificationDocument document;
-  final int currentPage;
+  final AdminUser request;
 
   @override
   Widget build(BuildContext context) {
@@ -446,7 +506,7 @@ class _PdfPagePreview extends StatelessWidget {
         ),
         const SizedBox(height: AdminSpacing.lg),
         Text(
-          document.title,
+          'Certificado pendiente',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 color: AdminColors.text,
                 fontWeight: FontWeight.w800,
@@ -454,8 +514,8 @@ class _PdfPagePreview extends StatelessWidget {
         ),
         const SizedBox(height: AdminSpacing.sm),
         Text(
-          'Pagina $currentPage de ${document.pageCount}',
-          style: const TextStyle(color: AdminColors.muted),
+          _display(request.organization),
+          style: const TextStyle(color: AdminColors.muted, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: AdminSpacing.lg),
         const _PdfLine(widthFactor: 1),
@@ -503,7 +563,9 @@ class _PdfLine extends StatelessWidget {
 }
 
 class _ReviewActions extends StatelessWidget {
-  const _ReviewActions();
+  const _ReviewActions({required this.onBlockedAction});
+
+  final VoidCallback onBlockedAction;
 
   @override
   Widget build(BuildContext context) {
@@ -516,14 +578,14 @@ class _ReviewActions extends StatelessWidget {
             icon: Icons.cancel_rounded,
             backgroundColor: const Color(0xFFFFDAD6),
             foregroundColor: AdminColors.danger,
-            onPressed: () {},
+            onPressed: onBlockedAction,
           ),
           _ReviewActionButton(
             label: 'Aprobar Documento',
             icon: Icons.check_circle_rounded,
             backgroundColor: AdminColors.navy,
             foregroundColor: Colors.white,
-            onPressed: () {},
+            onPressed: onBlockedAction,
           ),
         ];
 
@@ -597,7 +659,7 @@ class _InlineInfo extends StatelessWidget {
   const _InlineInfo({required this.label, required this.value});
 
   final String label;
-  final String value;
+  final String? value;
 
   @override
   Widget build(BuildContext context) {
@@ -607,7 +669,7 @@ class _InlineInfo extends StatelessWidget {
         style: const TextStyle(color: AdminColors.muted, fontWeight: FontWeight.w700),
         children: [
           TextSpan(
-            text: value,
+            text: _display(value),
             style: const TextStyle(color: AdminColors.text, fontWeight: FontWeight.w800),
           ),
         ],
@@ -650,4 +712,60 @@ class _ReviewActionButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _VerificationError extends StatelessWidget {
+  const _VerificationError({required this.error, required this.onRetry});
+
+  final String error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: AdminCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded, size: 46, color: AdminColors.danger),
+            const SizedBox(height: AdminSpacing.sm),
+            const Text('No se pudieron cargar las verificaciones.'),
+            const SizedBox(height: AdminSpacing.xs),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AdminColors.muted),
+            ),
+            const SizedBox(height: AdminSpacing.md),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyVerifications extends StatelessWidget {
+  const _EmptyVerifications();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: AdminCard(
+        child: Text(
+          'No hay supervisores pendientes.',
+          style: TextStyle(color: AdminColors.muted, fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+}
+
+String _display(String? value) {
+  final text = value?.trim();
+  return text == null || text.isEmpty ? 'No disponible' : text;
 }

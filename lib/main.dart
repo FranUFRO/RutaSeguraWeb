@@ -7,17 +7,50 @@ import 'screens/login_screen.dart';
 import 'screens/user_details_screen.dart';
 import 'screens/user_form_screen.dart';
 import 'widgets/admin_theme.dart';
+import 'services/app_services.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  AppServices.initialize();
+  await AppServices.auth.restore();
   runApp(const RutaSeguraApp());
 }
 
-class RutaSeguraApp extends StatelessWidget {
+class RutaSeguraApp extends StatefulWidget {
   const RutaSeguraApp({super.key});
+
+  @override
+  State<RutaSeguraApp> createState() => _RutaSeguraAppState();
+}
+
+class _RutaSeguraAppState extends State<RutaSeguraApp> {
+  @override
+  void initState() {
+    super.initState();
+    AppServices.auth.addListener(_handleSessionChange);
+  }
+
+  @override
+  void dispose() {
+    AppServices.auth.removeListener(_handleSessionChange);
+    super.dispose();
+  }
+
+  void _handleSessionChange() {
+    if (!AppServices.auth.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        navigatorKey.currentState
+            ?.pushNamedAndRemoveUntil(LoginScreen.routeName, (route) => false);
+      });
+    }
+  }
+
+  static final navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'Ruta Segura',
       theme: ThemeData(
@@ -36,6 +69,13 @@ class RutaSeguraApp extends StatelessWidget {
       ),
       initialRoute: LoginScreen.routeName,
       onGenerateRoute: (settings) {
+        final isPublic = settings.name == LoginScreen.routeName;
+        if (!isPublic && !AppServices.auth.isAuthenticated) {
+          return MaterialPageRoute<void>(
+            settings: const RouteSettings(name: LoginScreen.routeName),
+            builder: (_) => const LoginScreen(),
+          );
+        }
         return MaterialPageRoute(
           settings: settings,
           builder: (context) {

@@ -87,7 +87,7 @@ class MetricCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(icon, color: color),
@@ -136,8 +136,8 @@ class StatusChip extends StatelessWidget {
     return Chip(
       label: Text(label),
       visualDensity: VisualDensity.compact,
-      backgroundColor: color.withOpacity(0.12),
-      side: BorderSide(color: color.withOpacity(0.25)),
+      backgroundColor: color.withValues(alpha: 0.12),
+      side: BorderSide(color: color.withValues(alpha: 0.25)),
       labelStyle: TextStyle(color: color, fontWeight: FontWeight.w800),
     );
   }
@@ -270,7 +270,7 @@ class _UserActionIconButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           onTap: onPressed,
@@ -297,6 +297,9 @@ class AdminTextField extends StatelessWidget {
     this.keyboardType,
     this.obscureText = false,
     this.readOnly = false,
+    this.validator,
+    this.onChanged,
+    this.maxLines = 1,
   });
 
   final String label;
@@ -305,6 +308,9 @@ class AdminTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final bool obscureText;
   final bool readOnly;
+  final String? Function(String?)? validator;
+  final ValueChanged<String>? onChanged;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -313,11 +319,17 @@ class AdminTextField extends StatelessWidget {
       keyboardType: keyboardType,
       obscureText: obscureText,
       readOnly: readOnly,
+      validator: validator,
+      onChanged: onChanged,
+      maxLines: maxLines,
       decoration: InputDecoration(
+        isDense: true,
         labelText: label,
-        prefixIcon: icon == null ? null : Icon(icon),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        prefixIcon: icon == null ? null : Icon(icon, size: 20),
+        prefixIconConstraints: const BoxConstraints(minWidth: 42, minHeight: 42),
         filled: true,
-        fillColor: readOnly ? AdminColors.line.withOpacity(0.55) : AdminColors.field,
+        fillColor: readOnly ? AdminColors.line.withValues(alpha: 0.55) : AdminColors.field,
         suffixIcon: readOnly ? const Icon(Icons.lock_rounded, size: 18) : null,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

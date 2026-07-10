@@ -1,8 +1,4 @@
-enum AdminUserStatus {
-  active,
-  pending,
-  blocked,
-}
+enum AdminUserStatus { active, pending, blocked }
 
 class AdminUser {
   const AdminUser({
@@ -12,11 +8,11 @@ class AdminUser {
     required this.role,
     required this.phone,
     required this.rut,
-    required this.primaryAddress,
     required this.organization,
     required this.status,
-    required this.lastAccess,
-    required this.createdAt,
+    this.primaryAddress,
+    this.lastAccess,
+    this.createdAt,
   });
 
   final String id;
@@ -25,53 +21,79 @@ class AdminUser {
   final String role;
   final String phone;
   final String rut;
-  final String primaryAddress;
+  final String? primaryAddress;
   final String organization;
   final AdminUserStatus status;
-  final DateTime lastAccess;
-  final DateTime createdAt;
+  final DateTime? lastAccess;
+  final DateTime? createdAt;
+
+  factory AdminUser.fromJson(Map<String, dynamic> json) => AdminUser(
+        id: (json['id_user'] ?? '').toString(),
+        name: (json['full_name'] ?? 'Sin nombre').toString(),
+        email: (json['email'] ?? json['correo'] ?? '').toString(),
+        role: roleLabel((json['role'] ?? json['rol'] ?? '').toString()),
+        phone: (json['phone_number'] ?? json['telefono'] ?? '').toString(),
+        rut: (json['rut'] ?? '').toString(),
+        organization: (json['organizacion'] ?? 'Sin organizacion').toString(),
+        primaryAddress: json['direccion_principal']?.toString(),
+        status: statusFromApi((json['status'] ?? json['account_status'] ?? '').toString()),
+      );
+
+  static String roleLabel(String value) => switch (value.toUpperCase()) {
+        'ADMIN' => 'Administrador',
+        'SUPERVISOR' => 'Supervisor',
+        'VOLUNTEER' => 'Voluntario',
+        _ => value.isEmpty ? 'Sin rol' : value,
+      };
+
+  static String roleApi(String value) => switch (value.toLowerCase()) {
+        'administrador' || 'admin' => 'ADMIN',
+        'supervisor' => 'SUPERVISOR',
+        _ => 'VOLUNTEER',
+      };
+
+  static AdminUserStatus statusFromApi(String value) => switch (value.toUpperCase()) {
+        'ACTIVE' || 'ACTIVO' => AdminUserStatus.active,
+        'BLOCKED' || 'BLOQUEADO' => AdminUserStatus.blocked,
+        _ => AdminUserStatus.pending,
+      };
+
+  static String statusApi(AdminUserStatus status) => switch (status) {
+        AdminUserStatus.active => 'ACTIVE',
+        AdminUserStatus.pending => 'PENDING',
+        AdminUserStatus.blocked => 'BLOCKED',
+      };
 
   String get initials {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length == 1) {
-      return parts.first.substring(0, 1).toUpperCase();
-    }
+    final parts = name.trim().split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
   }
 
-  String get statusLabel {
-    return switch (status) {
-      AdminUserStatus.active => 'Activo',
-      AdminUserStatus.pending => 'Pendiente',
-      AdminUserStatus.blocked => 'Bloqueado',
-    };
-  }
+  String get statusLabel => switch (status) {
+        AdminUserStatus.active => 'Activo',
+        AdminUserStatus.pending => 'Pendiente',
+        AdminUserStatus.blocked => 'Bloqueado',
+      };
+}
 
-  AdminUser copyWith({
-    String? id,
-    String? name,
-    String? email,
-    String? role,
-    String? phone,
-    String? rut,
-    String? primaryAddress,
-    String? organization,
-    AdminUserStatus? status,
-    DateTime? lastAccess,
-    DateTime? createdAt,
-  }) {
-    return AdminUser(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      email: email ?? this.email,
-      role: role ?? this.role,
-      phone: phone ?? this.phone,
-      rut: rut ?? this.rut,
-      primaryAddress: primaryAddress ?? this.primaryAddress,
-      organization: organization ?? this.organization,
-      status: status ?? this.status,
-      lastAccess: lastAccess ?? this.lastAccess,
-      createdAt: createdAt ?? this.createdAt,
-    );
-  }
+class AdminMetrics {
+  const AdminMetrics({
+    required this.totalUsers,
+    required this.activeUsers,
+    required this.pendingUsers,
+    required this.blockedUsers,
+  });
+  final int totalUsers;
+  final int activeUsers;
+  final int pendingUsers;
+  final int blockedUsers;
+
+  factory AdminMetrics.fromUsers(List<AdminUser> users) => AdminMetrics(
+        totalUsers: users.length,
+        activeUsers: users.where((user) => user.status == AdminUserStatus.active).length,
+        pendingUsers: users.where((user) => user.status == AdminUserStatus.pending).length,
+        blockedUsers: users.where((user) => user.status == AdminUserStatus.blocked).length,
+      );
 }

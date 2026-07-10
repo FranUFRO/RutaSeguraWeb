@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/admin_theme.dart';
+import '../services/api_client.dart';
+import '../services/app_services.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,8 +19,30 @@ class _LoginScreenState extends State<LoginScreen> {
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
   bool _rememberSession = false;
   bool _obscurePassword = true;
+  bool _loading = false;
+  String? _error;
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() { _loading = true; _error = null; });
+    try {
+      await AppServices.auth.login(
+        _emailController.text,
+        _passwordController.text,
+        _rememberSession,
+      );
+      if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'No fue posible conectar con el servidor.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -63,7 +87,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ],
                     ),
-                    child: Column(
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
@@ -103,6 +129,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           hintText: 'nombre@ejemplo.com',
                           icon: Icons.mail_outline_rounded,
                           keyboardType: TextInputType.emailAddress,
+                          validator: (value) {
+                            final email = value?.trim() ?? '';
+                            if (email.isEmpty) return 'Ingresa tu correo electronico.';
+                            if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+                              return 'Ingresa un correo valido.';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 24),
                         _PasswordField(
@@ -111,7 +145,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           onToggleVisibility: () {
                             setState(() => _obscurePassword = !_obscurePassword);
                           },
+                          onSubmitted: (_) => _submit(),
                         ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 14),
+                          Text(_error!, style: const TextStyle(color: AdminColors.danger)),
+                        ],
                         const SizedBox(height: 14),
                         Row(
                           children: [
@@ -147,12 +186,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           width: double.infinity,
                           height: 52,
                           child: FilledButton(
-                            onPressed: () => Navigator.pushReplacementNamed(context, '/dashboard'),
+                            onPressed: _loading ? null : _submit,
                             style: FilledButton.styleFrom(
                               backgroundColor: AdminColors.navy,
                               foregroundColor: AdminColors.selago,
                               elevation: 10,
-                              shadowColor: AdminColors.navy.withOpacity(0.35),
+                              shadowColor: AdminColors.navy.withValues(alpha: 0.35),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -162,18 +201,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                 letterSpacing: 0.45,
                               ),
                             ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text('Iniciar Sesion'),
-                                SizedBox(width: 8),
-                                Icon(Icons.arrow_forward_rounded),
-                              ],
-                            ),
+                            child: _loading
+                                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text('Iniciar Sesion'),
+                                      SizedBox(width: 8),
+                                      Icon(Icons.arrow_forward_rounded),
+                                    ],
+                                  ),
                           ),
                         ),
                       ],
+                      ),
                     ),
                   ),
                 ),
@@ -193,6 +235,7 @@ class _LoginTextField extends StatelessWidget {
     required this.hintText,
     required this.icon,
     this.keyboardType,
+    this.validator,
   });
 
   final String label;
@@ -200,6 +243,7 @@ class _LoginTextField extends StatelessWidget {
   final String hintText;
   final IconData icon;
   final TextInputType? keyboardType;
+  final String? Function(String?)? validator;
 
   @override
   Widget build(BuildContext context) {
@@ -214,9 +258,10 @@ class _LoginTextField extends StatelessWidget {
               ),
         ),
         const SizedBox(height: 8),
-        TextField(
+        TextFormField(
           controller: controller,
           keyboardType: keyboardType,
+          validator: validator,
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: const TextStyle(color: AdminColors.muted),
@@ -247,11 +292,13 @@ class _PasswordField extends StatelessWidget {
     required this.controller,
     required this.obscureText,
     required this.onToggleVisibility,
+    required this.onSubmitted,
   });
 
   final TextEditingController controller;
   final bool obscureText;
   final VoidCallback onToggleVisibility;
+  final ValueChanged<String> onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -286,9 +333,15 @@ class _PasswordField extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        TextField(
+        TextFormField(
           controller: controller,
           obscureText: obscureText,
+          onFieldSubmitted: onSubmitted,
+          validator: (value) {
+            if ((value ?? '').isEmpty) return 'Ingresa tu contrasena.';
+            if ((value ?? '').length < 8) return 'Debe tener al menos 8 caracteres.';
+            return null;
+          },
           decoration: InputDecoration(
             hintText: '********',
             hintStyle: const TextStyle(color: AdminColors.muted),
