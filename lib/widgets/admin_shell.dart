@@ -345,7 +345,7 @@ class _Brand extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(compact ? 10 : 16),
             child: Image.asset(
-              'assets/images/logo_minimalista.png',
+              '../../assets/logo_minimalista.png',
               fit: BoxFit.cover,
             ),
           ),
