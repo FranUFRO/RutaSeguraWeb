@@ -1,0 +1,31 @@
+name: Deploy frontend to VPS
+
+on:
+  push:
+    branches:
+      - deploy
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy frontend on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -e
+            APP_DIR=/home/rutasegura/RutaSeguraWeb
+            if [ ! -d "$APP_DIR/.git" ]; then
+              git clone https://github.com/FranUFRO/RutaSeguraWeb.git "$APP_DIR"
+            fi
+            cd "$APP_DIR"
+            git fetch origin deploy
+            git reset --hard origin/deploy
+            docker compose up -d --build
+            docker image prune -f
