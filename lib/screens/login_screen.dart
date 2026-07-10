@@ -15,7 +15,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   static const String _logoUrl =
-      'https://www.figma.com/api/mcp/asset/6bd50382-6ceb-4d8f-af6c-2c5eed7802c8';
+      '../assets/images/logo_principal.png';
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();

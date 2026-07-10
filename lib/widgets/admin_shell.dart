@@ -342,10 +342,12 @@ class _Brand extends StatelessWidget {
             color: AdminColors.navy,
             borderRadius: BorderRadius.circular(compact ? 10 : 16),
           ),
-          child: Icon(
-            Icons.shield_rounded,
-            color: AdminColors.selago,
-            size: compact ? 20 : 26,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(compact ? 10 : 16),
+            child: Image.asset(
+              'assets/images/logo_minimalista.png',
+              fit: BoxFit.cover,
+            ),
           ),
         ),
         const SizedBox(width: AdminSpacing.sm),
