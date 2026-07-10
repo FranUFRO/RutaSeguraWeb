@@ -339,7 +339,7 @@ class _Brand extends StatelessWidget {
           width: compact ? 32 : 48,
           height: compact ? 32 : 48,
           decoration: BoxDecoration(
-            color: AdminColors.navy,
+            color: const Color.fromARGB(255, 252, 252, 252),
             borderRadius: BorderRadius.circular(compact ? 10 : 16),
           ),
           child: ClipRRect(

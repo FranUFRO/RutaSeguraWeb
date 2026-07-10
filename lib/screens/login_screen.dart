@@ -15,7 +15,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   static const String _logoUrl =
-      '../assets/images/logo_principal.png';
+      '../asset/logo_principal.png';
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
